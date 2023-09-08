@@ -15,28 +15,29 @@ pipeline {
             }
         }
 
-        // stage('Accessing EKS and deploying new Kubernetes App') {
-        //      steps {
-        //         withCredentials([[
-        //             $class: 'AmazonWebServicesCredentialsBinding',
-        //             credentialsId: 'aws-jenkins-ec2deploy',
-        //             accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-        //             secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
-
-        //                 sh "aws ec2 describe-instances --region=eu-central-1"
-        //         }
-        //     }
-        // } 
-
-        stage('k8s deployment') {
+        stage('Accessing EKS and deploying new Kubernetes App') {
              steps {
-                script {
-                withKubeConfig([credentialsId: 'K8S', serverUrl: '']) {
-                sh ('kubectl apply -f  deployment.yaml')
-                    }
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-jenkins-ec2deploy',
+                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
+
+                        sh "aws eks update-kubeconfig --region us-east-1 --name ascode-cluster"
+                        sh "kubectl apply -f  deployment.yaml"
                 }
             }
         } 
+
+        // stage('k8s deployment') {
+        //      steps {
+        //         script {
+        //         withKubeConfig([credentialsId: 'K8S', serverUrl: '']) {
+        //         sh ('kubectl apply -f  deployment.yaml')
+        //             }
+        //         }
+        //     }
+        // } 
 
         stage('Input to remove POD from AWS EKS') {
              steps {
