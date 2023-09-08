@@ -24,6 +24,7 @@ pipeline {
                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY']]) {
 
                         sh "aws eks update-kubeconfig --region us-east-1 --name ascode-cluster"
+                        sh "sleep 5"
                         sh "kubectl get services"
                         // sh "kubectl apply -f  deployment.yaml"
                 }
