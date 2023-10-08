@@ -32,4 +32,4 @@ spec:
       targetPort: 3000
   type: LoadBalancer
 
-  # after KUBECTL APPLY this file, run "minikube service flask-app-service"
+  # after KUBECTL APPLY this file, run "minikube service flask-app-service" 
