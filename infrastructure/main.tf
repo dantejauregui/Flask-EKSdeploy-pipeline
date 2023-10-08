@@ -1,57 +1,90 @@
 provider "aws" {
-  region = var.aws_region
+  region = local.region
 }
 
-#Create security group with firewall rules
-resource "aws_security_group" "my_security_group" {
-  name        = var.security_group
-  description = "security group for Ec2 instance"
+locals {
+  name   = "ascode-cluster"
+  region = "us-east-1"
 
-  ingress {
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  vpc_cidr = "10.123.0.0/16"
+  azs      = ["us-east-1a", "us-east-1b"]
 
- ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  public_subnets  = ["10.123.1.0/24", "10.123.2.0/24"]
+  private_subnets = ["10.123.3.0/24", "10.123.4.0/24"]
+  intra_subnets   = ["10.123.5.0/24", "10.123.6.0/24"]
 
- # outbound from jenkis server
-  egress {
-    from_port   = 0
-    to_port     = 65535
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags= {
-    Name = var.security_group
+  tags = {
+    Example = local.name
   }
 }
 
-# Create AWS ec2 instance
-resource "aws_instance" "myFirstInstance" {
-  ami           = var.ami_id
-  key_name = var.key_name
-  instance_type = var.instance_type
-  security_groups= [var.security_group]
-  tags= {
-    Name = var.tag_name
+module "vpc" {
+  source  = "terraform-aws-modules/vpc/aws"
+  version = "~> 4.0"
+
+  name = local.name
+  cidr = local.vpc_cidr
+
+  azs             = local.azs
+  private_subnets = local.private_subnets
+  public_subnets  = local.public_subnets
+  intra_subnets   = local.intra_subnets
+
+  enable_nat_gateway = true
+
+  public_subnet_tags = {
+    "kubernetes.io/role/elb" = 1
+  }
+
+  private_subnet_tags = {
+    "kubernetes.io/role/internal-elb" = 1
   }
 }
 
-# Create Elastic IP address
-resource "aws_eip" "myFirstInstance" {
-  vpc      = true
-  instance = aws_instance.myFirstInstance.id
-tags= {
-    Name = "my_elastic_ip"
+module "eks" {
+  source  = "terraform-aws-modules/eks/aws"
+  version = "19.15.1"
+
+  cluster_name                   = local.name
+  cluster_endpoint_public_access = true
+
+  cluster_addons = {
+    coredns = {
+      most_recent = true
+    }
+    kube-proxy = {
+      most_recent = true
+    }
+    vpc-cni = {
+      most_recent = true
+    }
   }
+
+  vpc_id                   = module.vpc.vpc_id
+  subnet_ids               = module.vpc.private_subnets
+  control_plane_subnet_ids = module.vpc.intra_subnets
+
+  # EKS Managed Node Group(s)
+  eks_managed_node_group_defaults = {
+    ami_type       = "AL2_x86_64"
+  }
+
+  eks_managed_node_groups = {
+    ascode-cluster-wg = {
+      min_size     = 1
+      max_size     = 2
+      desired_size = 1
+
+      instance_types = ["t3.small"]
+      capacity_type  = "SPOT"
+
+      tags = {
+        ExtraTag = "helloworld"
+      }
+    }
+  }
+  tags = local.tags
 }
 
-# code: https://www.coachdevops.com/2021/07/jenkins-terraform-integration-how-do.html
+#Luego de que se cree EKS, se coloca esto en la console para configurar: 
+#  aws eks update-kubeconfig --region us-east-1 --name ascode-cluster
